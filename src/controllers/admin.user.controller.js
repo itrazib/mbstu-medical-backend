@@ -5,51 +5,101 @@ import { ObjectId } from "mongodb";
 export const adminCreateUser = async (req, res) => {
   try {
     const db = await getDB();
-    const users = db.collection("users");
-    const doctors = db.collection("doctors");
 
-    const { name, email, password, role, uniId, department, specialization } =
-      req.body;
+    const usersCol = db.collection("users");
+    const doctorsCol = db.collection("doctors");
+    const staffCol = db.collection("medicalUsers");
+
+    const {
+      name,
+      email,
+      password,
+      role,
+      designation,
+      phone,
+      office,
+      bloodGroup,
+      photoUrl,
+    } = req.body;
+
+    // 🔹 Basic validation
+    if (!name || !password || !role) {
+      return res.status(400).json({ message: "Required fields missing" });
+    }
 
     if (!["doctor", "staff"].includes(role)) {
       return res.status(400).json({ message: "Invalid role" });
     }
 
-    const exists = await users.findOne({ email });
-    if (exists) {
-      return res.status(400).json({ message: "Email already registered" });
+    // 🔹 Doctor must have email
+    if (role === "doctor" && !email) {
+      return res.status(400).json({ message: "Email is required for doctor" });
+    }
+
+    // 🔹 Check duplicate email ONLY if email exists
+    if (email) {
+      const exists = await usersCol.findOne({ email });
+      if (exists) {
+        return res.status(400).json({ message: "Email already exists" });
+      }
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    const newUser = {
+    // 🔹 Create base user
+    const userData = {
       name,
-      email,
       password: hashedPassword,
       role,
-      department,
-      specialization,
       isApproved: true,
-      uniId,
       createdAt: new Date(),
     };
 
-    const result = await users.insertOne(newUser);
+    // Only add email if exists (doctor ক্ষেত্রে থাকবে)
+    if (email) {
+      userData.email = email;
+    }
 
-    // if doctor → also create doctor profile
+    const userResult = await usersCol.insertOne(userData);
+    const userId = userResult.insertedId;
+
+    // 🔹 Doctor profile
     if (role === "doctor") {
-      await doctors.insertOne({
-        userId: result.insertedId,
+      await doctorsCol.insertOne({
+        userId: new ObjectId(userId),
         name,
-        department,
-        specialization,
-        updatedAt: new Date(),
+        email, // doctor only
+        phone: phone || "",
+        designation: designation || "",
+        bloodGroup: bloodGroup || "",
+        photoUrl: photoUrl || "",
+        createdAt: new Date(),
       });
     }
 
-    res.json({ message: "User created successfully", user: newUser });
+    // 🔹 Staff profile (NO email)
+    if (role === "staff") {
+      await staffCol.insertOne({
+        userId: new ObjectId(userId),
+        name,
+        designation: designation || "",
+        phone: phone || "",
+        office: office || "",
+        bloodGroup: bloodGroup || "",
+        photoUrl: photoUrl || "",
+        createdAt: new Date(),
+      });
+    }
+
+    res.status(201).json({
+      message: `${role} created successfully`,
+      role,
+      userId,
+    });
+
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error(err);
+    res.status(500).json({ message: "Failed to create user" });
   }
 };
 

@@ -15,6 +15,7 @@ const router = express.Router();
 router.put("/profile", authMiddleware, roleMiddleware(["doctor"]), updateDoctorProfile);
 router.post("/doctorRegister", authMiddleware,  register);
 router.get("/today-patients", authMiddleware, todayAppointmentsCount);
+// router.get("/today-telemedicine-doctors", authMiddleware, getTodayTelemedicineDoctors);
 
 // students view all doctors
 // 

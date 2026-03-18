@@ -13,6 +13,7 @@ import {
 
 import authMiddleware from '../middleware/authMiddleware.js';
 import roleMiddleware from '../middleware/roleMiddleware.js';
+// import { getDutyRosterDoctor } from '../controllers/duty.roster.doctor.js';
 
 const router = express.Router();
 
@@ -25,6 +26,7 @@ router.get('/me', authMiddleware, getMe);
 
 // Admin only
 router.get('/users', authMiddleware, roleMiddleware(['admin']), getAllUsers);
+// router.get("/duty-roster-doctor-api", getDutyRosterDoctor);
 
 router.patch('/approve/:userId', authMiddleware, roleMiddleware(['admin']), approveUser);
 

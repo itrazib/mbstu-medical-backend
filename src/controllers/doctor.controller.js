@@ -158,3 +158,21 @@ export const todayAppointmentsCount = async (req, res) => {
   }
 };
 
+
+
+export const deleteDoctorProfile = async (req, res) => {
+  try {
+    const db = await getDB();
+    const doctors = db.collection("doctors");
+    const users = db.collection("users"); 
+    const { id } = req.params;
+
+    await doctors.deleteOne({ userId: new ObjectId(id) });
+    await users.deleteOne({ _id: new ObjectId(id) }); 
+    res.json({ message: "Doctor profile deleted" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  } 
+};
+
+

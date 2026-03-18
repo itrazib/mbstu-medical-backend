@@ -8,6 +8,7 @@ import {
   getStudentHistory
 } from "../controllers/medical.controller.js";
 
+
 const router = express.Router();
 
 // Doctor creates prescription
@@ -18,5 +19,8 @@ router.get("/my-history", authMiddleware, roleMiddleware(["student"]), getMyMedi
 
 // Doctor view specific student
 router.get("/history/:studentId", authMiddleware, roleMiddleware(["doctor"]), getStudentHistory);
+
+
+
 
 export default router;
