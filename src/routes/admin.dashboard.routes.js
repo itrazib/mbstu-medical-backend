@@ -31,9 +31,6 @@ router.post("/telemedicine-duty/add",authMiddleware, roleMiddleware(["admin"]), 
 router.post("/telemedicine-duty/delete/:id",authMiddleware, roleMiddleware(["admin"]), deleteTelemedicineDuty);
 
 
-router.get("/staff/medical-users", getMedicalUsers);
-router.get("/staff/duty-roster", getDutyRosterpublic);
-router.post("/staff/duty-roster/add", addDuty);
-router.post("/staff/duty-roster/delete/:id", deleteDuty);
+
 
 export default router;

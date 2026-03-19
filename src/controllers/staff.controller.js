@@ -1,15 +1,15 @@
+// src/controllers/staff.controller.js
 import { getDB } from "../config/db.js";
+import { ObjectId } from "mongodb";
 
+// Get all medical staff with designation
 export const getMedicalStaff = async (req, res) => {
   try {
     const db = await getDB();
     const medicalUsersCol = db.collection("medicalUsers");
 
-    // শুধু staff টাইপ ইউজার আনছি
     const staff = await medicalUsersCol
-      .find({
-        designation: { $exists: true, $ne: "" }, // যাদের designation আছে
-      })
+      .find({ designation: { $exists: true, $ne: "" } })
       .project({
         name: 1,
         designation: 1,
@@ -23,19 +23,16 @@ export const getMedicalStaff = async (req, res) => {
       .toArray();
 
     res.status(200).json({ staff });
-  } catch (error) {
-    console.error("Medical staff fetch error:", error);
-    res.status(500).json({
-      message: "Failed to fetch medical staff",
-    });
+  } catch (err) {
+    console.error("Medical staff fetch error:", err);
+    res.status(500).json({ message: "Failed to fetch medical staff" });
   }
 };
 
-// designation
+// Get all departments/designations
 export const getDepartments = async (req, res) => {
   try {
     const db = await getDB();
-
     const departments = await db
       .collection("medicalUsers")
       .distinct("designation");
@@ -46,7 +43,8 @@ export const getDepartments = async (req, res) => {
     res.status(500).json({ message: "Failed to fetch departments" });
   }
 };
-// staff by department
+
+// Get staff by department
 export const getMedicalUsers = async (req, res) => {
   try {
     const db = await getDB();
@@ -55,7 +53,19 @@ export const getMedicalUsers = async (req, res) => {
     const staff = await db
       .collection("medicalUsers")
       .find({ designation: department })
-      .project({ name: 1 }) // sidebar এ শুধু name দেখাব
+      .project({
+        _id: 1,
+        name: 1,
+        userId: 1,
+        department: 1,
+        designation: 1,
+        phone: 1,
+        office: 1,
+        bloodGroup: 1,
+        photoUrl: 1,
+        email: 1,
+        createdAt: 1,
+      })
       .toArray();
 
     res.json(staff);
@@ -64,10 +74,8 @@ export const getMedicalUsers = async (req, res) => {
     res.status(500).json({ message: "Failed to fetch staff" });
   }
 };
-// get roster by department
-const days = ["Saturday","Sunday","Monday","Tuesday","Wednesday","Thursday","Friday"];
-const shifts = ["Morning","Evening"];
 
+// Get duty roster by department with populated staff info
 export const getDutyRosterpublic = async (req, res) => {
   try {
     const db = await getDB();
@@ -80,36 +88,60 @@ export const getDutyRosterpublic = async (req, res) => {
           from: "medicalUsers",
           localField: "staff",
           foreignField: "_id",
-          as: "staffInfo"
-        }
+          as: "staffInfo",
+        },
       },
-      { $unwind: "$staffInfo" }
+      { $unwind: "$staffInfo" },
+      {
+        $project: {
+          _id: 1,
+          day: 1,
+          shift: 1,
+          startTime: 1,
+          endTime: 1,
+          department: 1,
+          staff: "$staffInfo", // full staff object
+        },
+      },
     ]).toArray();
 
     res.json(records);
   } catch (err) {
-    console.error(err);
+    console.error("Failed to fetch duty roster:", err);
     res.status(500).json({ message: "Failed to fetch duty roster" });
   }
 };
 
-// add duty assignment
+// Add a duty assignment
 export const addDuty = async (req, res) => {
   try {
     const db = await getDB();
     const { staff, department, day, shift, startTime, endTime } = req.body;
 
+    // Validate staff ID
+    if (!staff || typeof staff !== "string") {
+      return res.status(400).json({ message: "Staff ID is required and must be a string" });
+    }
+
+    const staffIdTrimmed = staff.trim();
+    if (!/^[0-9a-fA-F]{24}$/.test(staffIdTrimmed)) {
+      return res.status(400).json({ message: "Invalid staff ID format" });
+    }
+
+    const staffObjectId = new ObjectId(staffIdTrimmed);
+
+    // Insert duty record
     const result = await db.collection("dutyRosters").insertOne({
-      staff: new ObjectId(staff),
+      staff: staffObjectId,
       department,
       day,
       shift,
       startTime,
-      endTime
+      endTime,
     });
 
     // Populate staff info
-    const staffInfo = await db.collection("medicalUsers").findOne({ _id: new ObjectId(staff) });
+    const staffInfo = await db.collection("medicalUsers").findOne({ _id: staffObjectId });
 
     res.json({
       _id: result.insertedId,
@@ -118,27 +150,33 @@ export const addDuty = async (req, res) => {
       day,
       shift,
       startTime,
-      endTime
+      endTime,
     });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Failed to add duty" });
+    console.error("addDuty error:", err);
+    res.status(500).json({ message: "Failed to add duty", error: err.message });
   }
 };
 
-
-// delete duty assignment
+// Delete a duty assignment
 export const deleteDuty = async (req, res) => {
   try {
     const db = await getDB();
     const { id } = req.params;
 
-    await db.collection("dutyRosters").deleteOne({ _id: new ObjectId(id) });
+    if (!id || !/^[0-9a-fA-F]{24}$/.test(id)) {
+      return res.status(400).json({ message: "Invalid duty ID" });
+    }
+
+    const result = await db.collection("dutyRosters").deleteOne({ _id: new ObjectId(id) });
+
+    if (result.deletedCount === 0) {
+      return res.status(404).json({ message: "Duty not found" });
+    }
 
     res.json({ message: "Duty removed" });
   } catch (err) {
-    console.error(err);
+    console.error("deleteDuty error:", err);
     res.status(500).json({ message: "Failed to delete duty" });
   }
 };
-

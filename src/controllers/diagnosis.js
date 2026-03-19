@@ -51,11 +51,11 @@ function parseMonth(str) {
 export const getPathologyTests = async (req, res) => {
   try {
     const db = await getDB();
-    const testsCol = db.collection("tests"); // collection name
+    const testsCol = db.collection("tests");
 
     const { month } = req.query;
 
-    const query = { availableInMedicalCenter: false };
+    const query = {}; // ✅ FIX: remove wrong filter
 
     if (month) {
       const start = parseMonth(month);
@@ -76,5 +76,4 @@ export const getPathologyTests = async (req, res) => {
     console.error(err);
     res.status(500).json({ error: "Server error" });
   }
-
 };

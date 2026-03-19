@@ -16,7 +16,7 @@ export const getTelemedicineDuties = async (req, res) => {
       duties.map(async (d) => {
         const doc = await doctorsCol.findOne({ _id: new ObjectId(d.doctor) });
         return { ...d, doctor: doc };
-      })
+      }),
     );
 
     res.json({ doctors, duties: dutiesWithDoctors });
@@ -25,7 +25,6 @@ export const getTelemedicineDuties = async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 };
-
 
 // public
 export const getTelemedicineDuty = async (req, res) => {
@@ -66,8 +65,6 @@ export const getTelemedicineDuty = async (req, res) => {
   }
 };
 
-
-
 export const getTodayTelemedicineDoctors = async (req, res) => {
   try {
     const db = await getDB();
@@ -84,15 +81,17 @@ export const getTodayTelemedicineDoctors = async (req, res) => {
 
     const doctors = await Promise.all(
       duties.map(async (duty) => {
-        const doc = await doctorsCol.findOne({ _id: new ObjectId(duty.doctor) });
+        const doc = await doctorsCol.findOne({
+          _id: new ObjectId(duty.doctor),
+        });
         if (!doc) return null;
-        return { 
-          _id: doc._id, 
-          name: doc.name, 
-          designation: doc.designation, 
-          phone: doc.phone || ""  // phone number যোগ
+        return {
+          _id: doc._id,
+          name: doc.name,
+          designation: doc.designation,
+          phone: doc.phone || "", // phone number যোগ
         };
-      })
+      }),
     );
 
     const filteredDoctors = doctors.filter(Boolean);
@@ -104,7 +103,6 @@ export const getTodayTelemedicineDoctors = async (req, res) => {
   }
 };
 
-
 // Add telemedicine duty
 export const addTelemedicineDuty = async (req, res) => {
   try {
@@ -113,9 +111,14 @@ export const addTelemedicineDuty = async (req, res) => {
     const doctorsCol = db.collection("doctors");
 
     const { doctor, day } = req.body;
-    if (!doctor || !day) return res.status(400).json({ message: "Doctor and day required" });
+    if (!doctor || !day)
+      return res.status(400).json({ message: "Doctor and day required" });
 
-    const newDuty = { doctor: new ObjectId(doctor), day, createdAt: new Date() };
+    const newDuty = {
+      doctor: new ObjectId(doctor),
+      day,
+      createdAt: new Date(),
+    };
     const result = await dutyCol.insertOne(newDuty);
 
     const doctorInfo = await doctorsCol.findOne({ _id: new ObjectId(doctor) });
