@@ -15,6 +15,7 @@ import adminUserRoutes from './routes/admin.user.routes.js'
 import staffRoutes from './routes/staff.routes.js';
 import telemedicineRoutes from './routes/telemedicine.routes.js';
 import pathologyTestRoutes from './routes/pathology.test.js';
+import medicineRoutes from './routes/medicine.routes.js';
 import { connectDB } from './config/db.js';
 
 const app = express();
@@ -39,6 +40,7 @@ app.use(express.json());
   app.use("/api/staff", staffRoutes);
   app.use("/api/telemedicine", telemedicineRoutes);
   app.use("/api/diagnosis", pathologyTestRoutes);
+  app.use("/api/medicine", medicineRoutes);
 
   app.get('/', (req, res) => {
     res.send('✅ MBSTU Medical Server Running');
