@@ -7,6 +7,7 @@ import {
   getDoctorDetails,
   register,
   todayAppointmentsCount,
+  getPatientProfile,
 } from "../controllers/doctor.controller.js";
 
 const router = express.Router();
@@ -23,5 +24,7 @@ router.get("/list",  getAllDoctors);
 
 // get single doctor details
 router.get("/details/:id",  getDoctorDetails);
+
+router.get("/patient/:uniqueId", getPatientProfile);
 
 export default router;

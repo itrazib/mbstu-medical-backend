@@ -18,7 +18,7 @@ export const updateDoctorProfile = async (req, res) => {
       fee,
       days,
       bio,
-      image
+      image,
     } = req.body;
 
     const existing = await doctors.findOne({ userId: new ObjectId(doctorId) });
@@ -43,7 +43,7 @@ export const updateDoctorProfile = async (req, res) => {
     if (existing) {
       await doctors.updateOne(
         { userId: new ObjectId(doctorId) },
-        { $set: profileData }
+        { $set: profileData },
       );
       return res.json({ message: "Profile updated", profile: profileData });
     }
@@ -158,21 +158,46 @@ export const todayAppointmentsCount = async (req, res) => {
   }
 };
 
-
-
 export const deleteDoctorProfile = async (req, res) => {
   try {
     const db = await getDB();
     const doctors = db.collection("doctors");
-    const users = db.collection("users"); 
+    const users = db.collection("users");
     const { id } = req.params;
 
     await doctors.deleteOne({ userId: new ObjectId(id) });
-    await users.deleteOne({ _id: new ObjectId(id) }); 
+    await users.deleteOne({ _id: new ObjectId(id) });
     res.json({ message: "Doctor profile deleted" });
   } catch (err) {
     res.status(500).json({ error: err.message });
-  } 
+  }
 };
 
 
+
+export const getPatientProfile = async (req, res) => {
+  try {
+    const db = await getDB();
+    const usersCollection = db.collection("users");
+    const { uniqueId } = req.params;
+
+    const user = await usersCollection.findOne({ uniqueId });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "Patient not found",
+      });
+    }
+
+    res.json({
+      success: true,
+      user,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({
+      message: "Server error",
+    });
+  }
+};

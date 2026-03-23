@@ -7,61 +7,81 @@ import { getDB } from "../config/db.js";
 export const getDispenseRecords = async (req, res) => {
   try {
     const db = await getDB();
-    const collection = db.collection("dispenseRecords");
-
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 5;
-    const status = req.query.status;
-    const date = req.query.date;
-
+    const { page = 1, limit = 10, status, date } = req.query;
     const query = {};
+
     if (status && status !== "all") query.overallStatus = status;
-    if (date) {
-      const start = new Date(date);
-      start.setHours(0, 0, 0, 0);
-      const end = new Date(date);
-      end.setHours(23, 59, 59, 999);
-      query.createdAt = { $gte: start, $lte: end };
-    }
+    if (date) query.date = date;
 
-    const total = await collection.countDocuments(query);
-
-    const items = await collection
-      .find(query)
-      .sort({ createdAt: -1 })
-      .skip((page - 1) * limit)
-      .limit(limit)
+    const items = await db
+      .collection("dispenseRecords")
+      .aggregate([
+        { $match: query },
+        {
+          $lookup: {
+            from: "users",
+            localField: "patient.id",
+            foreignField: "_id",
+            as: "patient",
+          },
+        },
+        { $unwind: { path: "$patient", preserveNullAndEmptyArrays: true } },
+        {
+          $lookup: {
+            from: "users",
+            localField: "doctorId",
+            foreignField: "_id",
+            as: "doctor",
+          },
+        },
+        { $unwind: { path: "$doctor", preserveNullAndEmptyArrays: true } },
+        {
+          $lookup: {
+            from: "medicines",
+            localField: "medicines.medicineId",
+            foreignField: "_id",
+            as: "medicineData",
+          },
+        },
+        {
+          $addFields: {
+            medicines: {
+              $map: {
+                input: "$medicines",
+                as: "m",
+                in: {
+                  quantity: "$$m.quantity",
+                  medicine: {
+                    $arrayElemAt: [
+                      {
+                        $filter: {
+                          input: "$medicineData",
+                          cond: { $eq: ["$$this._id", "$$m.medicineId"] },
+                        },
+                      },
+                      0,
+                    ],
+                  },
+                },
+              },
+            },
+          },
+        },
+        { $project: { medicineData: 0 } },
+        { $sort: { createdAt: -1 } },
+        { $skip: (page - 1) * limit },
+        { $limit: parseInt(limit) },
+      ])
       .toArray();
 
-    // Populate patient and doctor names from other collections
-    const patientIds = items.map((i) => i.patient).filter(Boolean);
-    const doctorIds = items.map((i) => i.doctor).filter(Boolean);
+    const total = await db.collection("dispenseRecords").countDocuments(query);
 
-    const patients = await db
-      .collection("patients")
-      .find({ _id: { $in: patientIds.map((id) => new ObjectId(id)) } })
-      .project({ name: 1 })
-      .toArray();
-    const doctors = await db
-      .collection("doctors")
-      .find({ _id: { $in: doctorIds.map((id) => new ObjectId(id)) } })
-      .project({ name: 1 })
-      .toArray();
-
-    const populated = items.map((rec) => ({
-      ...rec,
-      patient:
-        patients.find((p) => p._id.toString() === rec.patient?.toString()) ||
-        null,
-      doctor:
-        doctors.find((d) => d._id.toString() === rec.doctor?.toString()) ||
-        null,
-    }));
-
-    res.set("X-Total-Count", total);
-    res.json({ items: populated, totalPages: Math.ceil(total / limit) });
+    res.json({
+      items,
+      currentPage: parseInt(page),
+      totalPages: Math.ceil(total / limit),
+    });
   } catch (err) {
-    console.error(err);
     res.status(500).json({ message: err.message });
   }
 };
@@ -91,36 +111,130 @@ export async function updateDispenseStatus(req, res) {
 }
 
 export async function finalizeDispense(req, res) {
-
-    const db = await getDB();
+  const db = await getDB();
   const { id } = req.params;
 
+  const session = db.client.startSession();
+
   try {
-    const record = await db
-      .collection("dispenseRecords")
-      .findOne({ _id: new ObjectId(id) });
+    await session.withTransaction(async () => {
+      const record = await db.collection("dispenseRecords").findOne(
+        { _id: new ObjectId(id) },
+        { session }
+      );
 
-    if (!record) return res.status(404).json({ message: "Record not found" });
+      if (!record) throw new Error("Record not found");
+      if (record.isFinalized) throw new Error("Already finalized");
 
-    if (record.overallStatus !== "completed")
-      return res.status(400).json({ message: "Record not completed yet" });
+      // 🔥 STOCK CHECK
+      for (const item of record.medicines) {
+        const med = await db.collection("medicines").findOne(
+          { _id: item.medicineId },
+          { session }
+        );
 
-    // Decrease stock for each medicine
-    const updates = record.medicines.map((item) =>
-      db
-        .collection("medicines")
-        .updateOne(
-          { _id: new ObjectId(item.medicine._id) },
+        if (!med || med.monthlyStockQuantity < item.quantity) {
+          throw new Error(`Insufficient stock for ${med?.name}`);
+        }
+      }
+
+      // 🔥 STOCK UPDATE
+      for (const item of record.medicines) {
+        await db.collection("medicines").updateOne(
+          { _id: item.medicineId },
           { $inc: { monthlyStockQuantity: -item.quantity } },
-        ),
-    );
+          { session }
+        );
+      }
 
-    await Promise.all(updates);
+      // 🔥 MARK FINALIZED
+      await db.collection("dispenseRecords").updateOne(
+        { _id: new ObjectId(id) },
+        {
+          $set: {
+            isFinalized: true,
+            finalizedAt: new Date(),
+          },
+        },
+        { session }
+      );
+    });
 
-    res.json({ message: "Dispense finalized and stock updated" });
+    res.json({ message: "Dispense finalized safely" });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    res.status(400).json({ message: err.message });
+  } finally {
+    await session.endSession();
   }
 }
+
+export const getDispensedReport = async (req, res) => {
+  try {
+    const db = await getDB();
+    const { start, end } = req.query;
+
+    if (!start || !end) {
+      return res.status(400).json({ message: "Start and End date required" });
+    }
+
+    const startDate = new Date(start);
+    const endDate = new Date(end);
+    endDate.setHours(23, 59, 59);
+
+    // 🔥 AGGREGATION
+    const result = await db.collection("dispenseRecords").aggregate([
+      {
+        $match: {
+          overallStatus: "completed",
+          createdAt: {
+            $gte: startDate,
+            $lte: endDate,
+          },
+        },
+      },
+
+      // unwind medicines array
+      { $unwind: "$medicines" },
+
+      // group by medicineId
+      {
+        $group: {
+          _id: "$medicines.medicine._id",
+          name: { $first: "$medicines.medicine.name" },
+          dispensedQuantity: { $sum: "$medicines.quantity" },
+        },
+      },
+
+      // lookup current stock
+      {
+        $lookup: {
+          from: "medicines",
+          localField: "_id",
+          foreignField: "_id",
+          as: "medicineInfo",
+        },
+      },
+
+      { $unwind: "$medicineInfo" },
+
+      {
+        $project: {
+          medicineId: "$_id",
+          name: 1,
+          dispensedQuantity: 1,
+          remainingMonthlyStock: "$medicineInfo.monthlyStockQuantity",
+        },
+      },
+    ]).toArray();
+
+    res.json(result);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({
+      message: "Failed to generate report",
+      error: err.message,
+    });
+  }
+};
 
 // module.exports = { getDispenseRecords };

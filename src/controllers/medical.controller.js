@@ -5,66 +5,51 @@ import { getDB } from "../config/db.js";
 export const createPrescription = async (req, res) => {
   try {
     const db = await getDB();
-    const med = db.collection("medical_records");
-    const users = db.collection("users");
 
-    const doctorId = req.user?._id;
+    const { studentId, diagnosis, medicines, note, problem } = req.body;
+    const doctorId = req.user._id;
 
-    // Extract body data
-    const { studentId, diagnosis, prescription, note, problem} = req.body;
-    console.log(req.body)
-
-    // Basic input validation
-    if (!studentId || !diagnosis || !prescription) {
-      return res.status(400).json({
-        error: "studentId, diagnosis and prescription are required."
-      });
+    if (!studentId || !diagnosis || !medicines?.length) {
+      return res.status(400).json({ message: "Missing required fields" });
     }
 
-    // Validate ObjectId format
-    if (!ObjectId.isValid(studentId) || !ObjectId.isValid(doctorId)) {
-      return res.status(400).json({ error: "Invalid ID format." });
-    }
+    const doctor = await db
+      .collection("users")
+      .findOne({ _id: new ObjectId(doctorId) });
 
-    // Fetch doctor and student information
-    const doctor = await users.findOne({ _id: new ObjectId(doctorId) });
-    const student = await users.findOne({ _id: new ObjectId(studentId) });
-
-    if (!doctor) {
-      return res.status(404).json({ error: "Doctor not found." });
-    }
-
-    if (!student) {
-      return res.status(404).json({ error: "Student not found." });
-    }
-
-    // Create new medical record
-    const newRecord = {
+    const newPrescription = {
       studentId: new ObjectId(studentId),
       doctorId: new ObjectId(doctorId),
       doctorName: doctor.name,
       diagnosis,
-      prescription,
+      medicines,
       problem,
       note: note || "",
+      createdAt: new Date(),
       date: new Date().toISOString().split("T")[0],
-      createdAt: new Date()
     };
 
-    // Insert data into DB
-    await med.insertOne(newRecord);
+    const result = await db
+      .collection("medical_records")
+      .insertOne(newPrescription);
 
-    return res.json({
-      message: "Prescription created successfully",
-      record: newRecord
+    // 🔥 AUTO CREATE DISPENSE RECORD
+    await db.collection("dispenseRecords").insertOne({
+      prescriptionId: result.insertedId,
+      patient: { id: studentId },
+      medicines: medicines.map((m) => ({
+        medicineId: new ObjectId(m.medicineId),
+        quantity: m.quantity,
+      })),
+      overallStatus: "pending",
+      createdAt: new Date(),
     });
 
+    res.json({ message: "Prescription + Dispense created" });
   } catch (err) {
-    console.error("Prescription error:", err);
-    return res.status(500).json({ error: err.message });
+    res.status(500).json({ message: err.message });
   }
 };
-
 // medical history 
 export const getMyMedicalHistory = async (req, res) => {
   try {

@@ -212,3 +212,54 @@ export const getLowStockMedicines = async (req, res) => {
     res.status(500).json({ message: "Failed to fetch low-stock medicines" });
   }
 };
+
+export const getAllMedicinesWithStock = async (req, res) => {
+  try {
+    const db = await getDB();
+    
+    // query parameters (optional search, pagination)
+    const { search = "", page = 1, limit = 1000 } = req.query; // default 1000 medicines
+    
+    const query = search
+      ? {
+          $or: [
+            { name: { $regex: search, $options: "i" } },
+            { genericName: { $regex: search, $options: "i" } },
+            { manufacturer: { $regex: search, $options: "i" } },
+            { dosage: { $regex: search, $options: "i" } },
+          ],
+        }
+      : {};
+    
+    const total = await db.collection("medicines").countDocuments(query);
+    
+    let medicines = await db
+      .collection("medicines")
+      .find(query)
+      .sort({ name: 1 })
+      .skip((page - 1) * limit)
+      .limit(parseInt(limit))
+      .toArray();
+    
+    // convert _id to string and include stock info
+    medicines = medicines.map((m) => ({
+      _id: m._id.toString(),
+      name: m.name,
+      genericName: m.genericName,
+      manufacturer: m.manufacturer,
+      dosage: m.dosage,
+      mainStockQuantity: m.mainStockQuantity || 0,
+      monthlyStockQuantity: m.monthlyStockQuantity || 0,
+    }));
+    
+    res.json({
+      medicines,
+      total,
+      totalPages: Math.ceil(total / limit),
+      currentPage: parseInt(page),
+    });
+  } catch (err) {
+    console.error("getAllMedicinesWithStock error:", err);
+    res.status(500).json({ message: err.message });
+  }
+};
