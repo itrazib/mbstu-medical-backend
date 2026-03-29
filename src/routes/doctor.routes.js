@@ -7,7 +7,16 @@ import {
   getDoctorDetails,
   register,
   todayAppointmentsCount,
-  getPatientProfile,
+  getPatientHistory,
+  getTodayPatients,
+
+  getpatients,
+  addMedicinesToRecord,
+  getMedicalRecord,
+  getPatientRecord,
+  getReportsByRecord,
+  getMedicines,
+  getDispenseRecordsByStudent,
 } from "../controllers/doctor.controller.js";
 
 const router = express.Router();
@@ -25,6 +34,17 @@ router.get("/list",  getAllDoctors);
 // get single doctor details
 router.get("/details/:id",  getDoctorDetails);
 
-router.get("/patient/:uniqueId", getPatientProfile);
+// router.get("/patient/:uniqueId", getPatientProfile);
+router.get("/patients/:doctorId", authMiddleware, getpatients);
+router.get("/patient-history/:uniqueId", authMiddleware, getPatientHistory);
+router.get("/today-patients", authMiddleware, getTodayPatients)
 
+
+router.post("/add-medicine", authMiddleware, addMedicinesToRecord)
+// router.get("/record/:recordId", authMiddleware, getMedicalRecord)
+router.get("/patient-record/:studentId", authMiddleware, getPatientRecord)
+router.get("/report/:recordId", authMiddleware, getReportsByRecord)
+
+router.get("/all-medicines", authMiddleware, getMedicines)
+router.get("/dispense-records/:studentId", authMiddleware, getDispenseRecordsByStudent)
 export default router;

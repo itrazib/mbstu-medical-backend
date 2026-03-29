@@ -34,30 +34,61 @@ export const bookAppointment = async (req, res) => {
 };
 
 // student apointment
-export const getMyAppointments = async (req, res) => {
+export const getMyAppointments =  async (req, res) => {
   try {
-    console.log("User from middleware:", req.user);
-
     const db = await getDB();
-    const appointments = db.collection("appointments");
+    const appointmentsCollection = db.collection("appointments");
+    const studentsCollection = db.collection("users"); // student info
+    const doctorsCollection = db.collection("users"); // doctor info
 
-    const studentId = req.user._id;
-    console.log("Student ID:", studentId);
+    const studentId = req.user._id; // from auth middleware
 
-    
+    // aggregation to join student and doctor info
+    const appointments = await appointmentsCollection.aggregate([
+      { $match: { studentId: new ObjectId(studentId) } },
+      // join doctor info
+      {
+        $lookup: {
+          from: "users",
+          localField: "doctorId",
+          foreignField: "_id",
+          as: "doctor"
+        }
+      },
+      { $unwind: { path: "$doctor", preserveNullAndEmptyArrays: true } },
+      // join student info
+      {
+        $lookup: {
+          from: "users",
+          localField: "studentId",
+          foreignField: "_id",
+          as: "student"
+        }
+      },
+      { $unwind: { path: "$student", preserveNullAndEmptyArrays: true } },
+      // project only required fields
+      {
+        $project: {
+          _id: 1,
+          date: 1,
+          time: 1,
+          problem: 1,
+          status: 1,
+          doctorName: "$doctor.name",
+          department: "$student.department",
+          studentName: "$student.name"
+        }
+      },
+      { $sort: { date: -1, time: 1 } } // latest first
+    ]).toArray();
 
-    const result = await appointments
-      .find({ studentId: new ObjectId(studentId) })
-      .sort({ createdAt: -1 })
-      .toArray();
-
-    console.log("Appointments found:", result.length);
-    res.json(result);
+    res.json(appointments);
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ message: "Server error" });
   }
 };
+
 
 // doctor apointment
 export const doctorAppointments = async (req, res) => {

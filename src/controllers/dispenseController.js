@@ -8,73 +8,105 @@ export const getDispenseRecords = async (req, res) => {
   try {
     const db = await getDB();
     const { page = 1, limit = 10, status, date } = req.query;
-    const query = {};
 
-    if (status && status !== "all") query.overallStatus = status;
-    if (date) query.date = date;
+    // ================== Build match stage ==================
+    const matchStage = {};
+    if (status && status !== "all") matchStage.overallStatus = status;
+    if (date) matchStage.date = date;
 
-    const items = await db
-      .collection("dispenseRecords")
-      .aggregate([
-        { $match: query },
-        {
-          $lookup: {
-            from: "users",
-            localField: "patient.id",
-            foreignField: "_id",
-            as: "patient",
-          },
+    // ================== Aggregate pipeline ==================
+    const pipeline = [
+      { $match: matchStage },
+
+      // cast nested IDs
+      {
+        $addFields: {
+          patientIdObj: { $toObjectId: "$patient.id" },
+          doctorIdObj: { $toObjectId: "$doctor.id" },
         },
-        { $unwind: { path: "$patient", preserveNullAndEmptyArrays: true } },
-        {
-          $lookup: {
-            from: "users",
-            localField: "doctorId",
-            foreignField: "_id",
-            as: "doctor",
-          },
+      },
+
+      // lookup patient
+      {
+        $lookup: {
+          from: "users",
+          localField: "patientIdObj",
+          foreignField: "_id",
+          as: "patientData",
         },
-        { $unwind: { path: "$doctor", preserveNullAndEmptyArrays: true } },
-        {
-          $lookup: {
-            from: "medicines",
-            localField: "medicines.medicineId",
-            foreignField: "_id",
-            as: "medicineData",
-          },
+      },
+      { $unwind: { path: "$patientData", preserveNullAndEmptyArrays: true } },
+
+      // lookup doctor
+      {
+        $lookup: {
+          from: "users",
+          localField: "doctorIdObj",
+          foreignField: "_id",
+          as: "doctorData",
         },
-        {
-          $addFields: {
-            medicines: {
-              $map: {
-                input: "$medicines",
-                as: "m",
-                in: {
-                  quantity: "$$m.quantity",
-                  medicine: {
-                    $arrayElemAt: [
-                      {
-                        $filter: {
-                          input: "$medicineData",
-                          cond: { $eq: ["$$this._id", "$$m.medicineId"] },
-                        },
+      },
+      { $unwind: { path: "$doctorData", preserveNullAndEmptyArrays: true } },
+
+      // lookup medicines
+      {
+        $lookup: {
+          from: "medicines",
+          localField: "medicines.medicineId",
+          foreignField: "_id",
+          as: "medicineData",
+        },
+      },
+
+      // merge medicine info
+      {
+        $addFields: {
+          medicines: {
+            $map: {
+              input: "$medicines",
+              as: "m",
+              in: {
+                quantity: "$$m.quantity",
+                medicine: {
+                  $arrayElemAt: [
+                    {
+                      $filter: {
+                        input: "$medicineData",
+                        cond: { $eq: ["$$this._id", "$$m.medicineId"] },
                       },
-                      0,
-                    ],
-                  },
+                    },
+                    0,
+                  ],
                 },
               },
             },
           },
         },
-        { $project: { medicineData: 0 } },
-        { $sort: { createdAt: -1 } },
-        { $skip: (page - 1) * limit },
-        { $limit: parseInt(limit) },
-      ])
-      .toArray();
+      },
 
-    const total = await db.collection("dispenseRecords").countDocuments(query);
+      // project final fields
+      {
+        $project: {
+          medicineData: 0,
+          patientIdObj: 0,
+          doctorIdObj: 0,
+        },
+      },
+
+      // sort
+      { $sort: { createdAt: -1 } },
+
+      // pagination
+      { $skip: (parseInt(page) - 1) * parseInt(limit) },
+      { $limit: parseInt(limit) },
+    ];
+
+    const items = await db.collection("dispenseRecords").aggregate(pipeline).toArray();
+
+    // total count with same filter
+    const totalPipeline = [{ $match: matchStage }, { $count: "count" }];
+    const totalResult = await db.collection("dispenseRecords").aggregate(totalPipeline).toArray();
+    const total = totalResult[0]?.count || 0;
 
     res.json({
       items,
@@ -82,6 +114,7 @@ export const getDispenseRecords = async (req, res) => {
       totalPages: Math.ceil(total / limit),
     });
   } catch (err) {
+    console.error(err);
     res.status(500).json({ message: err.message });
   }
 };
@@ -181,31 +214,35 @@ export const getDispensedReport = async (req, res) => {
     const endDate = new Date(end);
     endDate.setHours(23, 59, 59);
 
-    // 🔥 AGGREGATION
     const result = await db.collection("dispenseRecords").aggregate([
+      // filter completed and date range
       {
         $match: {
           overallStatus: "completed",
-          createdAt: {
-            $gte: startDate,
-            $lte: endDate,
-          },
+          createdAt: { $gte: startDate, $lte: endDate },
         },
       },
 
       // unwind medicines array
       { $unwind: "$medicines" },
 
-      // group by medicineId
+      // extract medicineId and quantity
       {
-        $group: {
-          _id: "$medicines.medicine._id",
-          name: { $first: "$medicines.medicine.name" },
-          dispensedQuantity: { $sum: "$medicines.quantity" },
+        $addFields: {
+          medicineId: "$medicines.medicineId",
+          quantity: "$medicines.quantity",
         },
       },
 
-      // lookup current stock
+      // group by medicineId
+      {
+        $group: {
+          _id: "$medicineId",
+          dispensedQuantity: { $sum: "$quantity" },
+        },
+      },
+
+      // lookup medicine info to get name and stock
       {
         $lookup: {
           from: "medicines",
@@ -214,17 +251,19 @@ export const getDispensedReport = async (req, res) => {
           as: "medicineInfo",
         },
       },
+      { $unwind: { path: "$medicineInfo", preserveNullAndEmptyArrays: true } },
 
-      { $unwind: "$medicineInfo" },
-
+      // project final fields
       {
         $project: {
           medicineId: "$_id",
-          name: 1,
+          name: "$medicineInfo.name",
           dispensedQuantity: 1,
           remainingMonthlyStock: "$medicineInfo.monthlyStockQuantity",
         },
       },
+
+      { $sort: { name: 1 } },
     ]).toArray();
 
     res.json(result);
@@ -236,5 +275,4 @@ export const getDispensedReport = async (req, res) => {
     });
   }
 };
-
 // module.exports = { getDispenseRecords };

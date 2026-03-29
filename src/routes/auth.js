@@ -13,12 +13,13 @@ import {
 
 import authMiddleware from '../middleware/authMiddleware.js';
 import roleMiddleware from '../middleware/roleMiddleware.js';
+import upload from "../middleware/upload.js";
 // import { getDutyRosterDoctor } from '../controllers/duty.roster.doctor.js';
 
 const router = express.Router();
 
 // Public
-router.post('/register', register);
+router.post('/register', upload.single("image"), register);
 router.post('/login', login);
 
 // Protected

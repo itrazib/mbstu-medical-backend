@@ -17,7 +17,9 @@ import telemedicineRoutes from './routes/telemedicine.routes.js';
 import pathologyTestRoutes from './routes/pathology.test.js';
 import medicineRoutes from './routes/medicine.routes.js';
 import dispenseRoutes from './routes/dispense.routes.js';
+import studentRoutes from './routes/student.routes.js'
 import { connectDB } from './config/db.js';
+import path from 'path';
 
 const app = express();
 app.use(cors({
@@ -43,6 +45,8 @@ app.use(express.json());
   app.use("/api/diagnosis", pathologyTestRoutes);
   app.use("/api/medicine", medicineRoutes);
   app.use("/api/dispense", dispenseRoutes);
+  app.use("/api/student", studentRoutes);
+  app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
   app.get('/', (req, res) => {
     res.send('✅ MBSTU Medical Server Running');
