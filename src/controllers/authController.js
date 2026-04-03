@@ -114,7 +114,7 @@ export const register = async (req, res) => {
       message: "Registered successfully. Waiting for admin approval.",
     });
   } catch (error) {
-    console.log(error);
+    // console.log(error);
     res.status(500).json({ message: "Registration failed" });
   }
 };
@@ -127,24 +127,24 @@ export const login = async (req, res) => {
     const db = await getDB();
     const user = await db.collection("users").findOne({ email });
 
-    console.log("From DB User:", user);
-    console.log("Entered Password:", password);
-    console.log("DB Hashed Password:", user?.password);
+    // console.log("From DB User:", user);
+    // console.log("Entered Password:", password);
+    // console.log("DB Hashed Password:", user?.password);
 
     if (!user) {
-      console.log("User not found");
+      // console.log("User not found");
       return res.status(401).json({ message: "User not found" });
     }
 
     const match = await bcrypt.compare(password, user.password);
-    console.log("Password match:", match);
+    // console.log("Password match:", match);
 
     if (!match) {
       return res.status(401).json({ message: "Wrong password" });
     }
 
-    console.log("User Role:", user.role);
-    console.log("isApproved:", user.isApproved);
+    // console.log("User Role:", user.role);
+    // console.log("isApproved:", user.isApproved);
 
     if (user.role !== "admin" && user.isApproved !== true) {
       return res
@@ -158,9 +158,9 @@ export const login = async (req, res) => {
       email: user.email,
     });
 
-    console.log("LOGIN SUCCESS");
-    console.log(user);
-    console.log(user._id.toString());
+    // console.log("LOGIN SUCCESS");
+    // console.log(user);
+    // console.log(user._id.toString());
 
     res.json({
       success: true,
@@ -173,7 +173,7 @@ export const login = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("Login Error:", error);
+    // console.error("Login Error:", error);
     res.status(500).json({ message: "Login failed" });
   }
 };

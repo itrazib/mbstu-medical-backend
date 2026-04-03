@@ -10,10 +10,10 @@ const authMiddleware = async (req, res, next) => {
     if (!token) {
       return res.status(401).json({ message: 'No token provided' });
     }
-    console.log(token)
+    // console.log(token)
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    console.log(decoded)
+    // console.log(decoded)
 
     const db = await getDB();
     const user = await db

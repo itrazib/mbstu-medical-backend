@@ -74,19 +74,56 @@ export const getDutyRosterDoctor = async (req, res) => {
 
 
 // Add a doctor to a duty shift
+// export const addDutyAssignment = async (req, res) => {
+//   try {
+//     const db = await getDB();
+//     const dutyCol = db.collection("dutyRosterDoctor");
+
+//     const { doctor, day, shift, startTime, endTime } = req.body;
+
+//     if (!doctor || !day || !shift) {
+//       return res.status(400).json({ message: "Doctor, day and shift are required" });
+//     }
+
+//     const newAssignment = {
+//       doctor: new ObjectId(doctor),
+//       day,
+//       shift,
+//       startTime,
+//       endTime,
+//       createdAt: new Date(),
+//     };
+
+//     const result = await dutyCol.insertOne(newAssignment);
+
+//     // populate doctor info
+//     const doctorsCol = db.collection("doctors");
+//     const doctorInfo = await doctorsCol.findOne({ _id: new ObjectId(doctor) });
+//     newAssignment._id = result.insertedId;
+//     newAssignment.doctor = doctorInfo;
+
+//     res.status(201).json(newAssignment);
+//   } catch (err) {
+//     console.error(err);
+//     res.status(500).json({ error: err.message });
+//   }
+// };
 export const addDutyAssignment = async (req, res) => {
   try {
     const db = await getDB();
     const dutyCol = db.collection("dutyRosterDoctor");
+    const doctorsCol = db.collection("doctors");
 
     const { doctor, day, shift, startTime, endTime } = req.body;
 
     if (!doctor || !day || !shift) {
-      return res.status(400).json({ message: "Doctor, day and shift are required" });
+      return res.status(400).json({ message: "Doctor, day, and shift are required" });
     }
 
+    const doctorId = new ObjectId(doctor);
+
     const newAssignment = {
-      doctor: new ObjectId(doctor),
+      doctor: doctorId,
       day,
       shift,
       startTime,
@@ -97,8 +134,7 @@ export const addDutyAssignment = async (req, res) => {
     const result = await dutyCol.insertOne(newAssignment);
 
     // populate doctor info
-    const doctorsCol = db.collection("doctors");
-    const doctorInfo = await doctorsCol.findOne({ _id: new ObjectId(doctor) });
+    const doctorInfo = await doctorsCol.findOne({ _id: doctorId }, { projection: { name: 1 } });
     newAssignment._id = result.insertedId;
     newAssignment.doctor = doctorInfo;
 
@@ -108,6 +144,7 @@ export const addDutyAssignment = async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 };
+
 
 // Delete a doctor from a duty shift
 export const deleteDutyAssignment = async (req, res) => {

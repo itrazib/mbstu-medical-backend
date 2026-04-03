@@ -132,7 +132,7 @@ export const register = async (req, res) => {
       message: "Registered. Waiting for admin approval.",
     });
   } catch (error) {
-    console.log(error);
+    // console.log(error);
     res.status(500).json({ message: "Registration failed" });
   }
 };

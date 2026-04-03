@@ -7,9 +7,9 @@ export const bookAppointment = async (req, res) => {
     const appointments = db.collection("appointments");
 
     const { doctorId, date, time, patientName, problem } = req.body;
-    console.log(req.body)
+    // console.log(req.body)
     const studentId = req.user._id;
-    console.log("booking doctor id", doctorId);
+    // console.log("booking doctor id", doctorId);
 
     const newAppointment = {
       studentId: new ObjectId(studentId),
@@ -96,22 +96,22 @@ export const doctorAppointments = async (req, res) => {
     const db = await getDB();
     const appointments = db.collection("appointments");
       
-    console.log("sdfjkshdfsjkf",req.user)
+    // console.log("sdfjkshdfsjkf",req.user)
     const doctorId = req.user._id;
    
 
-    console.log("DoctorId from token:", doctorId);
-    console.log(
-      "All doctorIds in DB:",
-      (await appointments.find().toArray()).map((a) => a.doctorId)
-    );
+    // console.log("DoctorId from token:", doctorId);
+    // console.log(
+    //   "All doctorIds in DB:",
+    //   (await appointments.find().toArray()).map((a) => a.doctorId)
+    // );
 
     const result = await appointments
       .find({doctorId: new ObjectId(doctorId)})
       .sort({ createdAt: -1 })
       .toArray();
 
-    console.log("Appointments found:", result.length);
+    // // console.log("Appointments found:", result.length);
 
     res.json(result);
   } catch (err) {

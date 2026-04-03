@@ -104,7 +104,7 @@ export const getMyReports = async (req, res) => {
   try {
     const db = await getDB();
     const studentId = req.user._id;
-    console.log(studentId)
+    // console.log(studentId)
 
     const reports = await db.collection("reports").aggregate([
   { $match: { studentId: new ObjectId(studentId) } },

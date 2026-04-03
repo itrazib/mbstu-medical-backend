@@ -103,7 +103,7 @@ export const getSingleMedicine = async (req, res) => {
     const db = await getDB();
     const { id } = req.params;
 
-    console.log("Requested ID:", id);
+    // console.log("Requested ID:", id);
 
     // ✅ validate id
     if (!ObjectId.isValid(id)) {
